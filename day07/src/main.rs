@@ -1,54 +1,75 @@
 #[macro_use]
 extern crate maplit;
 
-use std::{fs, thread};
+use std::fs;
 use std::collections::HashMap;
+use std::ops::RangeInclusive;
 
 fn main() {
     let input: Vec<isize> = fs::read_to_string("./day07/input/input.txt").unwrap()
         .split(',').map(|x| x.parse().unwrap()).collect();
-    let mut max_out: isize = isize::min_value();
-    for phases in permutations(5) {
-        let mut last_output = 0;
-        for phase in phases {
-            last_output = run(&input, vec![phase as isize, last_output]);
-        }
-        if last_output > max_out {
-            max_out = last_output;
-        }
-    }
-    println!("Part 1: {}", max_out);
+    println!("Part 1: {}", run_amp(&input, 0..=4, false));
+    println!("Part 2: {}", run_amp(&input, 5..=9, true));
 }
 
-fn run(tape: &Vec<isize>, in_values: Vec<isize>) -> isize {
-    let mut input = tape.clone();
-    let mut output: isize = 0;
+fn run_amp(tape: &Vec<isize>, phase_range: RangeInclusive<usize>, cycle: bool) -> isize {
+    let mut max_out: isize = isize::min_value();
+    for phases in permutations(phase_range, 5) {
+        let mut states: Vec<(Vec<isize>, usize)> = vec![(tape.clone(), 0); 5];
+        let mut last_out = 0;
+        for (idx, &phase) in phases.iter().enumerate().cycle() {
+            let state = states.get_mut(idx).unwrap();
+            let mut in_values: Vec<isize> = Vec::new();
+            if state.1 == 0 {
+                in_values.push(phase as isize);
+            }
+            in_values.push(last_out);
+            let result = run(&mut state.0, in_values, &mut state.1);
+            if result.is_some() {
+                last_out = result.unwrap();
+                if !cycle && idx == 4 {
+                    break;
+                }
+            } else if idx == 4 {
+                break;
+            }
+        }
+        if last_out > max_out {
+            max_out = last_out;
+        }
+    }
+    max_out
+}
+
+fn run(input: &mut Vec<isize>, in_values: Vec<isize>, i: &mut usize) -> Option<isize> {
     let opcodes = get_opcodes();
     let mut in_iter = in_values.iter();
-    let mut i: usize = 0;
     loop {
-        let op: &Opcode = opcodes.get(&(input[i] % 100)).unwrap();
-        let param_modes = [input[i] / 100 % 10, input[i] / 1000 % 10, input[i] / 10000 % 10];
-        let params: Vec<isize> = input[i + 1..=i + op.param_count].iter().enumerate()
+        let op: &Opcode = opcodes.get(&(input[*i] % 100)).unwrap();
+        let param_modes = [input[*i] / 100 % 10, input[*i] / 1000 % 10, input[*i] / 10000 % 10];
+        let params: Vec<isize> = input[*i + 1..=*i + op.param_count].iter().enumerate()
             .map(|(p_idx, p)| {
                 let addr = op.addr_param_idx.is_some() && p_idx == op.addr_param_idx.unwrap();
                 if addr || param_modes[p_idx] == 1 { *p } else { input[*p as usize] }
             }).collect();
-        let r = (&op.apply)(&params, &mut input);
+        let r = (&op.apply)(&params, input);
         match r {
             OpResult::NONE => {}
             OpResult::INPUT => input[params[op.addr_param_idx.unwrap()] as usize] = *in_iter.next().unwrap(),
-            OpResult::OUTPUT => output = input[params[op.addr_param_idx.unwrap()] as usize],
+            OpResult::OUTPUT => {
+                *i += op.param_count + 1;
+                return Some(input[params[op.addr_param_idx.unwrap()] as usize])
+            },
             OpResult::WRITE(v) => input[params[op.addr_param_idx.unwrap()] as usize] = v,
             OpResult::JUMP(d) => {
-                i = d as usize;
+                *i = d as usize;
                 continue;
             }
             OpResult::HALT => break
         }
-        i += op.param_count + 1;
+        *i += op.param_count + 1;
     }
-    output
+    None
 }
 
 fn get_opcodes() -> HashMap<isize, Opcode> {
@@ -88,8 +109,8 @@ enum OpResult {
     HALT,
 }
 
-pub fn permutations(size: usize) -> Permutations {
-    Permutations { idxs: (0..size).collect(), swaps: vec![0; size], i: 0 }
+pub fn permutations(range: RangeInclusive<usize>, size: usize) -> Permutations {
+    Permutations { idxs: range.collect(), swaps: vec![0; size], i: 0 }
 }
 
 pub struct Permutations {
