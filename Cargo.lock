@@ -39,6 +39,13 @@ name = "day08"
 version = "0.1.0"
 
 [[package]]
+name = "day09"
+version = "0.1.0"
+dependencies = [
+ "maplit 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "maplit"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
